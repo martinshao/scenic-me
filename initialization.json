@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "skill_version": "0.1.0",
+  "project": "scenic_me",
+  "org": "com.martinshaw",
+  "platforms": [
+    "ios",
+    "android"
+  ],
+  "created_utc": "2026-09-07T13:13:37.836574+00:00",
+  "flutter_version": "Flutter 3.47.2 • channel stable • https://github.com/flutter/flutter.git\nFramework • revision d3b14c8769 (12 days ago) • 2026-08-26 16:07:51 -0700\nEngine • hash 1cf1c4773fb941c4c74a7f8bb144a8837596c0f4 (revision a804b26164) (12 days ago) • 2026-08-26 18:46:13.000Z\nTools • Dart 3.13.2 • DevTools 2.60.0",
+  "status": "scaffold_checks_passed",
+  "checks": [
+    {
+      "name": "create",
+      "command": [
+        "/opt/homebrew/bin/flutter",
+        "create",
+        "--empty",
+        "--no-pub",
+        "--project-name",
+        "scenic_me",
+        "--org",
+        "com.martinshaw",
+        "--platforms",
+        "ios,android",
+        "."
+      ],
+      "exit_code": 0,
+      "log": "docs/verification/bootstrap/create.log"
+    },
+    {
+      "name": "pub-get",
+      "command": [
+        "/opt/homebrew/bin/flutter",
+        "pub",
+        "get"
+      ],
+      "exit_code": 0,
+      "log": "docs/verification/bootstrap/pub-get.log"
+    },
+    {
+      "name": "format",
+      "command": [
+        "/opt/homebrew/bin/dart",
+        "format",
+        "lib",
+        "test"
+      ],
+      "exit_code": 0,
+      "log": "docs/verification/bootstrap/format.log"
+    },
+    {
+      "name": "analyze",
+      "command": [
+        "/opt/homebrew/bin/flutter",
+        "analyze"
+      ],
+      "exit_code": 0,
+      "log": "docs/verification/bootstrap/analyze.log"
+    },
+    {
+      "name": "test",
+      "command": [
+        "/opt/homebrew/bin/flutter",
+        "test"
+      ],
+      "exit_code": 0,
+      "log": "docs/verification/bootstrap/test.log"
+    }
+  ],
+  "product_validation": "not_run",
+  "platform_builds": "not_run",
+  "deployment": "not_run"
+}
