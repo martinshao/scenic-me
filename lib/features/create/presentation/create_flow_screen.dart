@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../app/theme/app_theme.dart';
+import '../data/nearby_services.dart';
 import 'nearby_map_screen.dart';
 
 const _travelImage =
@@ -21,9 +22,14 @@ enum CreationMode {
 enum CreationStep { scene, portrait, style, review, generating, result }
 
 class CreateFlowScreen extends StatefulWidget {
-  const CreateFlowScreen({required this.mode, super.key});
+  const CreateFlowScreen({
+    required this.mode,
+    this.nearbyMapDependencies,
+    super.key,
+  });
 
   final CreationMode mode;
+  final NearbyMapDependencies? nearbyMapDependencies;
 
   @override
   State<CreateFlowScreen> createState() => _CreateFlowScreenState();
@@ -83,6 +89,7 @@ class _CreateFlowScreenState extends State<CreateFlowScreen> {
   Widget build(BuildContext context) {
     if (_step == CreationStep.scene && widget.mode == CreationMode.nearby) {
       return NearbyMapScreen(
+        dependencies: widget.nearbyMapDependencies,
         city: _nearbyCity,
         locationMode: _nearbyLocationMode,
         filter: _nearbyFilter,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/theme/app_theme.dart';
+import '../../create/data/nearby_services.dart';
 import '../../create/presentation/create_flow_screen.dart';
 
 const _travelImage =
@@ -8,7 +9,9 @@ const _travelImage =
     'west-lake-travel-portrait.png';
 
 class HomeShell extends StatefulWidget {
-  const HomeShell({super.key});
+  const HomeShell({this.nearbyMapDependencies, super.key});
+
+  final NearbyMapDependencies? nearbyMapDependencies;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -19,7 +22,12 @@ class _HomeShellState extends State<HomeShell> {
 
   Future<void> _startCreation(CreationMode mode) async {
     await Navigator.of(context).push<void>(
-      MaterialPageRoute(builder: (_) => CreateFlowScreen(mode: mode)),
+      MaterialPageRoute(
+        builder: (_) => CreateFlowScreen(
+          mode: mode,
+          nearbyMapDependencies: widget.nearbyMapDependencies,
+        ),
+      ),
     );
   }
 

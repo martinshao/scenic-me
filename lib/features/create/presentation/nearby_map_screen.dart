@@ -1,8 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart' show LatLng;
 
 import '../../../app/theme/app_theme.dart';
+import '../data/nearby_services.dart';
 
 const _travelImage =
     'docs/changes/001-ai-travel-photo/prototype/assets/'
@@ -28,6 +31,7 @@ class NearbyMapScreen extends StatefulWidget {
     required this.onFilterChanged,
     required this.onSceneChanged,
     required this.onContinue,
+    this.dependencies,
     super.key,
   });
 
@@ -40,28 +44,41 @@ class NearbyMapScreen extends StatefulWidget {
   final ValueChanged<NearbyFilter> onFilterChanged;
   final ValueChanged<String?> onSceneChanged;
   final ValueChanged<String> onContinue;
+  final NearbyMapDependencies? dependencies;
 
   @override
   State<NearbyMapScreen> createState() => _NearbyMapScreenState();
 }
 
 class _NearbyMapScreenState extends State<NearbyMapScreen> {
+  final MapController _mapController = MapController();
+  late final NearbyMapDependencies _dependencies;
   late String _city;
   late bool _locationMode;
   late NearbyFilter _filter;
   late String? _selectedScene;
   bool _showList = false;
   bool _locating = false;
+  LatLng? _currentPoint;
+  _SceneSpot? _searchedScene;
+  List<String> _recentCities = const [];
 
-  List<_SceneSpot> get _scenes => _spotsForCity(_city);
+  List<_SceneSpot> get _scenes => [?_searchedScene, ..._spotsForCity(_city)];
 
   @override
   void initState() {
     super.initState();
+    _dependencies = widget.dependencies ?? NearbyMapDependencies.production();
     _city = widget.city;
     _locationMode = widget.locationMode;
     _filter = widget.filter;
     _selectedScene = widget.selectedScene;
+    unawaited(_loadRecentCities());
+  }
+
+  Future<void> _loadRecentCities() async {
+    final cities = await _dependencies.recentCities.load();
+    if (mounted) setState(() => _recentCities = cities);
   }
 
   Future<void> _openCityPicker() async {
@@ -71,7 +88,8 @@ class _NearbyMapScreenState extends State<NearbyMapScreen> {
       useSafeArea: true,
       backgroundColor: Colors.transparent,
       barrierColor: AppColors.deepOcean.withValues(alpha: 0.42),
-      builder: (_) => _CityPickerSheet(currentCity: _city),
+      builder: (_) =>
+          _CityPickerSheet(currentCity: _city, recentCities: _recentCities),
     );
     if (!mounted || choice == null) return;
     if (choice.useLocation) {
@@ -95,28 +113,98 @@ class _NearbyMapScreenState extends State<NearbyMapScreen> {
       return;
     }
     setState(() => _locating = true);
-    await Future<void>.delayed(const Duration(milliseconds: 850));
-    if (!mounted) return;
-    setState(() {
-      _locating = false;
-      _city = '杭州';
-      _locationMode = true;
-      _selectedScene = null;
-    });
-    widget.onCityChanged(_city, true);
-    widget.onSceneChanged(null);
-    _showMessage('已定位到杭州，距离为本地演示数据');
+    try {
+      final located = await _dependencies.location.locateCurrentCity();
+      if (!mounted) return;
+      setState(() {
+        _locating = false;
+        _city = located.city;
+        _currentPoint = located.point;
+        _locationMode = true;
+        _selectedScene = null;
+        _searchedScene = null;
+      });
+      if (_dependencies.useNetworkTiles) {
+        _mapController.move(located.point, 14);
+      }
+      widget.onCityChanged(_city, true);
+      widget.onSceneChanged(null);
+      await _rememberCity(_city);
+      _showMessage('已定位到$_city，位置只用于本次附近推荐');
+    } on LocationFailure catch (error) {
+      if (!mounted) return;
+      setState(() => _locating = false);
+      _showLocationFailure(error);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _locating = false);
+      _showMessage('定位失败，请稍后重试或手动选择城市');
+    }
   }
 
-  void _selectCity(String city) {
+  Future<void> _selectCity(String city) async {
     setState(() {
       _city = city;
       _locationMode = false;
+      _currentPoint = null;
       _selectedScene = null;
+      _searchedScene = null;
     });
+    if (_dependencies.useNetworkTiles) {
+      _mapController.move(_centerForCity(city), 12.8);
+    }
     widget.onCityChanged(city, false);
     widget.onSceneChanged(null);
+    await _rememberCity(city);
     _showMessage('已切换到$city，未使用定位');
+  }
+
+  Future<void> _rememberCity(String city) async {
+    final cities = await _dependencies.recentCities.remember(city);
+    if (mounted) setState(() => _recentCities = cities);
+  }
+
+  void _showLocationFailure(LocationFailure error) {
+    final canOpenSettings =
+        error.reason == LocationFailureReason.deniedForever ||
+        error.reason == LocationFailureReason.serviceDisabled;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(error.message),
+          action: canOpenSettings
+              ? SnackBarAction(
+                  label: '打开设置',
+                  onPressed: () =>
+                      _dependencies.location.openSettings(error.reason),
+                )
+              : null,
+        ),
+      );
+  }
+
+  Future<void> _openPlaceSearch() async {
+    final result = await showModalBottomSheet<PlaceSearchResult>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: AppColors.deepOcean.withValues(alpha: 0.42),
+      builder: (_) =>
+          _PlaceSearchSheet(city: _city, service: _dependencies.placeSearch),
+    );
+    if (!mounted || result == null) return;
+    final scene = _SceneSpot.search(result);
+    setState(() {
+      _searchedScene = scene;
+      _selectedScene = scene.title;
+      _showList = false;
+    });
+    if (_dependencies.useNetworkTiles) {
+      _mapController.move(result.point, 15);
+    }
+    widget.onSceneChanged(scene.title);
   }
 
   void _selectFilter(NearbyFilter filter) {
@@ -143,114 +231,228 @@ class _NearbyMapScreenState extends State<NearbyMapScreen> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final landscape = constraints.maxWidth > constraints.maxHeight;
-            return Stack(
-              children: [
-                Positioned.fill(
-                  child: Semantics(
-                    image: true,
-                    label: '$_city可创作场景示意地图，地图、距离和机位均为演示数据',
-                    child: CustomPaint(painter: _TravelMapPainter(city: _city)),
+            return SizedBox(
+              width: constraints.maxWidth,
+              height: constraints.maxHeight,
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: Semantics(
+                      image: true,
+                      label: '$_city真实地图，可选择照片场景或搜索地点',
+                      child: _RealMap(
+                        mapController: _mapController,
+                        city: _city,
+                        scenes: _scenes,
+                        selectedScene: _selectedScene,
+                        currentPoint: _currentPoint,
+                        useNetworkTiles: _dependencies.useNetworkTiles,
+                        onSelected: _selectScene,
+                      ),
+                    ),
                   ),
-                ),
-                _MapHeader(
-                  city: _city,
-                  showList: _showList,
-                  onBack: widget.onBack,
-                  onCityTap: _openCityPicker,
-                  onViewToggle: () => setState(() => _showList = !_showList),
-                ),
-                Positioned(
-                  top: 70,
-                  left: 16,
-                  right: landscape ? constraints.maxWidth - 370 : 16,
-                  child: _FilterBar(
-                    selected: _filter,
-                    locationMode: _locationMode,
-                    onSelected: _selectFilter,
+                  _MapHeader(
+                    city: _city,
+                    showList: _showList,
+                    onBack: widget.onBack,
+                    onCityTap: _openCityPicker,
+                    onSearchTap: _openPlaceSearch,
+                    onViewToggle: () => setState(() => _showList = !_showList),
                   ),
-                ),
-                Positioned(
-                  top: 122,
-                  left: 16,
-                  child: _ModeBadge(locationMode: _locationMode),
-                ),
-                Positioned(
-                  top: 118,
-                  right: 16,
-                  child: _CircleButton(
-                    key: const Key('nearby-locate'),
-                    tooltip: '定位当前城市',
-                    icon: Icons.my_location_rounded,
-                    showNotificationDot: !_locationMode,
-                    onPressed: _showLocationPurpose,
-                  ),
-                ),
-                if (_showList)
                   Positioned(
-                    top: 166,
+                    top: 70,
                     left: 16,
-                    right: landscape ? 372 : 16,
-                    bottom: landscape
-                        ? 16
-                        : (_selectedScene == null ? 28 : 226),
-                    child: _SceneList(
-                      scenes: _scenes,
+                    right: landscape ? constraints.maxWidth - 370 : 16,
+                    child: _FilterBar(
+                      selected: _filter,
                       locationMode: _locationMode,
-                      selectedScene: _selectedScene,
-                      onSelected: _selectScene,
+                      onSelected: _selectFilter,
                     ),
-                  )
-                else
-                  ..._buildMarkers(constraints, landscape),
-                Positioned(
-                  right: landscape ? 372 : 14,
-                  bottom: landscape ? 12 : (_selectedScene == null ? 18 : 218),
-                  child: const _MapCredit(),
-                ),
-                if (_selectedScene == null && !_showList)
+                  ),
                   Positioned(
+                    top: 122,
                     left: 16,
-                    right: landscape ? 372 : 16,
-                    bottom: 18,
-                    child: const _ChooseHint(),
+                    child: _ModeBadge(locationMode: _locationMode),
                   ),
-                if (_selectedScene != null)
-                  _SelectedSceneCard(
-                    scene: _scenes.firstWhere(
-                      (scene) => scene.title == _selectedScene,
-                      orElse: () => _scenes.first,
+                  Positioned(
+                    top: 118,
+                    right: 16,
+                    child: _CircleButton(
+                      key: const Key('nearby-locate'),
+                      tooltip: '定位当前城市',
+                      icon: Icons.my_location_rounded,
+                      showNotificationDot: !_locationMode,
+                      onPressed: _showLocationPurpose,
                     ),
-                    locationMode: _locationMode,
-                    landscape: landscape,
-                    onContinue: () => widget.onContinue(_selectedScene!),
                   ),
-                if (_locating) const _LocatingOverlay(),
-              ],
+                  if (_showList)
+                    Positioned(
+                      top: 166,
+                      left: 16,
+                      right: landscape ? 372 : 16,
+                      bottom: landscape
+                          ? 16
+                          : (_selectedScene == null ? 28 : 226),
+                      child: _SceneList(
+                        scenes: _scenes,
+                        locationMode: _locationMode,
+                        selectedScene: _selectedScene,
+                        onSelected: _selectScene,
+                      ),
+                    )
+                  else
+                    const SizedBox.shrink(),
+                  Positioned(
+                    right: landscape ? 372 : 14,
+                    bottom: landscape
+                        ? 12
+                        : (_selectedScene == null ? 18 : 218),
+                    child: const _MapCredit(),
+                  ),
+                  if (_selectedScene == null && !_showList)
+                    Positioned(
+                      left: 16,
+                      right: landscape ? 372 : 16,
+                      bottom: 18,
+                      child: const _ChooseHint(),
+                    ),
+                  if (_selectedScene != null)
+                    _SelectedSceneCard(
+                      scene: _scenes.firstWhere(
+                        (scene) => scene.title == _selectedScene,
+                        orElse: () => _scenes.first,
+                      ),
+                      locationMode: _locationMode,
+                      landscape: landscape,
+                      onContinue: () => widget.onContinue(_selectedScene!),
+                    ),
+                  if (_locating) const _LocatingOverlay(),
+                ],
+              ),
             );
           },
         ),
       ),
     );
   }
+}
 
-  List<Widget> _buildMarkers(BoxConstraints constraints, bool landscape) {
-    final scenes = _scenes;
-    final positions = landscape
-        ? const [(0.09, 0.43), (0.40, 0.56), (0.27, 0.75)]
-        : const [(0.18, 0.30), (0.56, 0.45), (0.05, 0.62)];
-    return [
-      for (var index = 0; index < scenes.length; index++)
-        Positioned(
-          left: constraints.maxWidth * positions[index].$1,
-          top: constraints.maxHeight * positions[index].$2,
-          child: _SceneMarker(
-            key: Key('nearby-scene-$index'),
-            scene: scenes[index],
-            selected: scenes[index].title == _selectedScene,
-            onTap: () => _selectScene(scenes[index]),
-          ),
+class _RealMap extends StatelessWidget {
+  const _RealMap({
+    required this.mapController,
+    required this.city,
+    required this.scenes,
+    required this.selectedScene,
+    required this.currentPoint,
+    required this.useNetworkTiles,
+    required this.onSelected,
+  });
+
+  final MapController mapController;
+  final String city;
+  final List<_SceneSpot> scenes;
+  final String? selectedScene;
+  final LatLng? currentPoint;
+  final bool useNetworkTiles;
+  final ValueChanged<_SceneSpot> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!useNetworkTiles) {
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final positions = constraints.maxWidth > constraints.maxHeight
+              ? const [(0.06, 0.40), (0.31, 0.57), (0.18, 0.72)]
+              : const [(0.08, 0.27), (0.49, 0.43), (0.03, 0.60)];
+          return Stack(
+            children: [
+              Positioned.fill(
+                child: CustomPaint(painter: _TravelMapPainter(city: city)),
+              ),
+              for (var index = 0; index < scenes.length; index++)
+                Positioned(
+                  left: constraints.maxWidth * positions[index % 3].$1,
+                  top: constraints.maxHeight * positions[index % 3].$2,
+                  child: SizedBox(
+                    width: 176,
+                    height: 94,
+                    child: _SceneMarker(
+                      key: Key('nearby-scene-$index'),
+                      scene: scenes[index],
+                      selected: scenes[index].title == selectedScene,
+                      onTap: () => onSelected(scenes[index]),
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+      );
+    }
+    return FlutterMap(
+      mapController: mapController,
+      options: MapOptions(
+        initialCenter: _centerForCity(city),
+        initialZoom: 12.8,
+        minZoom: 3,
+        maxZoom: 19,
+        interactionOptions: const InteractionOptions(
+          flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
         ),
-    ];
+      ),
+      children: [
+        TileLayer(
+          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          userAgentPackageName: 'com.martinshaw.scenic_me',
+          maxNativeZoom: 19,
+        ),
+        MarkerLayer(
+          markers: [
+            for (var index = 0; index < scenes.length; index++)
+              Marker(
+                point: scenes[index].point,
+                width: 176,
+                height: 94,
+                alignment: Alignment.bottomCenter,
+                child: _SceneMarker(
+                  key: Key('nearby-scene-$index'),
+                  scene: scenes[index],
+                  selected: scenes[index].title == selectedScene,
+                  onTap: () => onSelected(scenes[index]),
+                ),
+              ),
+            if (currentPoint != null)
+              Marker(
+                point: currentPoint!,
+                width: 30,
+                height: 30,
+                child: const _CurrentLocationMarker(),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _CurrentLocationMarker extends StatelessWidget {
+  const _CurrentLocationMarker();
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: '当前位置',
+      child: const DecoratedBox(
+        decoration: BoxDecoration(
+          color: AppColors.clearSky,
+          shape: BoxShape.circle,
+          border: Border.fromBorderSide(
+            BorderSide(color: AppColors.white, width: 4),
+          ),
+          boxShadow: [BoxShadow(color: Color(0x55326473), blurRadius: 10)],
+        ),
+      ),
+    );
   }
 }
 
@@ -260,6 +462,7 @@ class _MapHeader extends StatelessWidget {
     required this.showList,
     required this.onBack,
     required this.onCityTap,
+    required this.onSearchTap,
     required this.onViewToggle,
   });
 
@@ -267,6 +470,7 @@ class _MapHeader extends StatelessWidget {
   final bool showList;
   final VoidCallback onBack;
   final VoidCallback onCityTap;
+  final VoidCallback onSearchTap;
   final VoidCallback onViewToggle;
 
   @override
@@ -316,14 +520,21 @@ class _MapHeader extends StatelessWidget {
                     const SizedBox(width: 9),
                     Container(width: 1, height: 22, color: AppColors.border),
                     const SizedBox(width: 9),
-                    const Expanded(
-                      child: Text(
-                        '搜索景点或区域',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: AppColors.supportTeal,
-                          fontSize: 12,
+                    Expanded(
+                      child: InkWell(
+                        key: const Key('place-search'),
+                        onTap: onSearchTap,
+                        child: const Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            '搜索景点或区域',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: AppColors.supportTeal,
+                              fontSize: 12,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -537,26 +748,32 @@ class _SceneMarker extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          scene.shortTitle,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
+                    Flexible(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            scene.shortTitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${scene.kind} · ${scene.positions} 机位',
-                          style: const TextStyle(
-                            color: AppColors.supportTeal,
-                            fontSize: 10,
+                          const SizedBox(height: 4),
+                          Text(
+                            '${scene.kind} · ${scene.positions} 机位',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppColors.supportTeal,
+                              fontSize: 10,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -811,7 +1028,7 @@ class _MapCredit extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: const Text(
-        '示意地图 · 非真实数据',
+        '© OpenStreetMap contributors',
         style: TextStyle(color: AppColors.supportTeal, fontSize: 10),
       ),
     );
@@ -858,10 +1075,197 @@ class _LocatingOverlay extends StatelessWidget {
   }
 }
 
+class _PlaceSearchSheet extends StatefulWidget {
+  const _PlaceSearchSheet({required this.city, required this.service});
+
+  final String city;
+  final PlaceSearchService service;
+
+  @override
+  State<_PlaceSearchSheet> createState() => _PlaceSearchSheetState();
+}
+
+class _PlaceSearchSheetState extends State<_PlaceSearchSheet> {
+  final _controller = TextEditingController();
+  List<PlaceSearchResult> _results = const [];
+  bool _searching = false;
+  bool _submitted = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _search() async {
+    final query = _controller.text.trim();
+    if (query.isEmpty) {
+      setState(() => _error = '请输入景点或区域名称');
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _searching = true;
+      _submitted = true;
+      _error = null;
+    });
+    try {
+      final results = await widget.service.search(
+        query: query,
+        city: widget.city,
+      );
+      if (!mounted) return;
+      setState(() {
+        _results = results;
+        _searching = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _results = const [];
+        _searching = false;
+        _error = '地点搜索暂时不可用，请检查网络后重试';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.morningMist,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          12,
+          20,
+          18 + MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.72,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '在${widget.city}搜索地点',
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '关闭地点搜索',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                key: const Key('place-search-input'),
+                controller: _controller,
+                autofocus: true,
+                textInputAction: TextInputAction.search,
+                onSubmitted: (_) => _search(),
+                onChanged: (_) {
+                  if (_error != null) setState(() => _error = null);
+                },
+                decoration: InputDecoration(
+                  labelText: '景点或区域',
+                  hintText: '例如：雷峰塔、外滩',
+                  errorText: _error,
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: IconButton(
+                    key: const Key('place-search-submit'),
+                    tooltip: '搜索地点',
+                    onPressed: _searching ? null : _search,
+                    icon: const Icon(Icons.arrow_forward_rounded),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (_searching)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: CircularProgressIndicator(),
+                  ),
+                )
+              else if (_submitted && _results.isEmpty && _error == null)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 22),
+                  child: Text('没有找到匹配地点，请尝试更完整的名称。'),
+                )
+              else
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: _results.length,
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final result = _results[index];
+                      return ListTile(
+                        key: Key('place-search-result-$index'),
+                        contentPadding: EdgeInsets.zero,
+                        leading: const CircleAvatar(
+                          backgroundColor: AppColors.mintWash,
+                          foregroundColor: AppColors.deepOcean,
+                          child: Icon(Icons.place_outlined),
+                        ),
+                        title: Text(
+                          result.name,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        subtitle: Text(
+                          result.displayName,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        onTap: () => Navigator.of(context).pop(result),
+                      );
+                    },
+                  ),
+                ),
+              const SizedBox(height: 8),
+              const Text(
+                '仅在点击搜索后查询 · 地点数据 © OpenStreetMap contributors',
+                style: TextStyle(color: AppColors.supportTeal, fontSize: 10),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _CityPickerSheet extends StatefulWidget {
-  const _CityPickerSheet({required this.currentCity});
+  const _CityPickerSheet({
+    required this.currentCity,
+    required this.recentCities,
+  });
 
   final String currentCity;
+  final List<String> recentCities;
 
   @override
   State<_CityPickerSheet> createState() => _CityPickerSheetState();
@@ -888,7 +1292,11 @@ class _CityPickerSheetState extends State<_CityPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    const cities = ['杭州', '上海', '北京', '成都', '西安', '厦门'];
+    const popularCities = ['杭州', '上海', '北京', '成都', '西安', '厦门'];
+    final cities = {
+      ...widget.recentCities,
+      ...popularCities,
+    }.take(6).toList(growable: false);
     return Material(
       color: AppColors.morningMist,
       borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
@@ -984,9 +1392,9 @@ class _CityPickerSheetState extends State<_CityPickerSheet> {
               ),
             ),
             const SizedBox(height: 16),
-            const Text(
-              '最近与常用',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+            Text(
+              widget.recentCities.isEmpty ? '常用城市' : '最近与常用',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 9),
             GridView.builder(
@@ -1028,7 +1436,7 @@ class _CityPickerSheetState extends State<_CityPickerSheet> {
                 SizedBox(width: 7),
                 Expanded(
                   child: Text(
-                    '手动选城无需定位权限。最近城市仅保存在这台设备（演示暂不持久化）。',
+                    '手动选城无需定位权限。最近城市仅保存在这台设备，不保存你的具体位置。',
                     style: TextStyle(
                       color: AppColors.supportTeal,
                       fontSize: 10,
@@ -1092,19 +1500,19 @@ class _LocationPurposeSheet extends StatelessWidget {
             ),
             const SizedBox(height: 15),
             const Text(
-              '只用于推荐你附近的景点、距离和拍摄机位。你也可以不开启定位，手动选择城市。当前仅模拟定位，不会请求系统权限。',
+              '只用于推荐你附近的景点、距离和拍摄机位。继续后系统会询问前台定位权限；你也可以不开启定位，手动选择城市。',
               style: TextStyle(color: AppColors.supportTeal, height: 1.55),
             ),
             const SizedBox(height: 16),
             FilledButton(
-              key: const Key('continue-location-demo'),
+              key: const Key('continue-location'),
               onPressed: () => Navigator.of(context).pop(true),
               style: FilledButton.styleFrom(
                 minimumSize: const Size(double.infinity, 50),
                 foregroundColor: AppColors.white,
                 backgroundColor: AppColors.deepOcean,
               ),
-              child: const Text('继续模拟定位'),
+              child: const Text('继续并允许定位'),
             ),
             const SizedBox(height: 8),
             OutlinedButton(
@@ -1269,7 +1677,19 @@ class _SceneSpot {
     required this.distance,
     required this.description,
     required this.alignment,
+    required this.point,
   });
+
+  factory _SceneSpot.search(PlaceSearchResult result) => _SceneSpot(
+    title: result.name,
+    shortTitle: result.name,
+    kind: '搜索地点',
+    positions: 1,
+    distance: '已找到真实地点',
+    description: '以这个地点为场景继续，下一步可以添加肖像与选择风格。',
+    alignment: Alignment.center,
+    point: result.point,
+  );
 
   final String title;
   final String shortTitle;
@@ -1278,6 +1698,7 @@ class _SceneSpot {
   final String distance;
   final String description;
   final Alignment alignment;
+  final LatLng point;
 }
 
 class _CityChoice {
@@ -1299,6 +1720,7 @@ List<_SceneSpot> _spotsForCity(String city) {
         distance: '约 1.2 km',
         description: '现在适合侧逆光，人物轮廓会更自然。',
         alignment: Alignment(-0.1, 0),
+        point: LatLng(30.2319, 120.1483),
       ),
       _SceneSpot(
         title: '西湖游船',
@@ -1308,6 +1730,7 @@ List<_SceneSpot> _spotsForCity(String city) {
         distance: '约 800 m',
         description: '水面反光柔和，适合自然抓拍感。',
         alignment: Alignment(0.55, 0),
+        point: LatLng(30.2426, 120.1536),
       ),
       _SceneSpot(
         title: '曲院风荷',
@@ -1317,6 +1740,7 @@ List<_SceneSpot> _spotsForCity(String city) {
         distance: '约 2.4 km',
         description: '绿意充足，适合清透的半身构图。',
         alignment: Alignment(-0.45, 0),
+        point: LatLng(30.2535, 120.1374),
       ),
     ];
   }
@@ -1328,6 +1752,7 @@ List<_SceneSpot> _spotsForCity(String city) {
     '厦门' => ('环岛路', '沙坡尾', '鼓浪屿'),
     _ => ('$city · 城市光影', '$city · 街角', '$city · 天际线'),
   };
+  final center = _centerForCity(city);
   return [
     _SceneSpot(
       title: names.$1,
@@ -1337,6 +1762,7 @@ List<_SceneSpot> _spotsForCity(String city) {
       distance: '约 1.0 km',
       description: '适合利用城市轮廓和当前光线完成人像构图。',
       alignment: const Alignment(-0.1, 0),
+      point: LatLng(center.latitude - 0.006, center.longitude + 0.004),
     ),
     _SceneSpot(
       title: names.$2,
@@ -1346,6 +1772,7 @@ List<_SceneSpot> _spotsForCity(String city) {
       distance: '约 1.8 km',
       description: '街道纵深清晰，适合自然行走画面。',
       alignment: const Alignment(0.55, 0),
+      point: LatLng(center.latitude + 0.006, center.longitude - 0.008),
     ),
     _SceneSpot(
       title: names.$3,
@@ -1355,6 +1782,17 @@ List<_SceneSpot> _spotsForCity(String city) {
       distance: '约 2.6 km',
       description: '地标辨识度高，适合完整环境人像。',
       alignment: const Alignment(-0.45, 0),
+      point: LatLng(center.latitude + 0.002, center.longitude + 0.011),
     ),
   ];
 }
+
+LatLng _centerForCity(String city) => switch (city) {
+  '杭州' => const LatLng(30.2434, 120.1502),
+  '上海' => const LatLng(31.2304, 121.4737),
+  '北京' => const LatLng(39.9042, 116.4074),
+  '成都' => const LatLng(30.5728, 104.0668),
+  '西安' => const LatLng(34.3416, 108.9398),
+  '厦门' => const LatLng(24.4798, 118.0894),
+  _ => const LatLng(35.8617, 104.1954),
+};

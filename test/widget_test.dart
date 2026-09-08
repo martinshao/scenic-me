@@ -1,12 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:scenic_me/app/app.dart';
 import 'package:scenic_me/app/theme/app_theme.dart';
+import 'package:scenic_me/features/create/data/nearby_services.dart';
 import 'package:scenic_me/features/create/presentation/create_flow_screen.dart';
+
+NearbyMapDependencies _nearbyDependencies({_MemoryRecentCitiesStore? store}) =>
+    NearbyMapDependencies(
+      location: const _FakeLocationService(),
+      placeSearch: const _FakePlaceSearchService(),
+      recentCities: store ?? _MemoryRecentCitiesStore(),
+      useNetworkTiles: false,
+    );
 
 void main() {
   testWidgets('首页展示三个创作入口和四项底部导航', (tester) async {
-    await tester.pumpWidget(const App());
+    await tester.pumpWidget(App(nearbyMapDependencies: _nearbyDependencies()));
 
     expect(find.text('你好，旅行者'), findsOneWidget);
     expect(find.text('把旅途里没拍好的，重新拍好'), findsOneWidget);
@@ -20,7 +30,7 @@ void main() {
   });
 
   testWidgets('底部导航可以切换一级页面', (tester) async {
-    await tester.pumpWidget(const App());
+    await tester.pumpWidget(App(nearbyMapDependencies: _nearbyDependencies()));
 
     await tester.tap(find.text('灵感'));
     await tester.pumpAndSettle();
@@ -37,7 +47,7 @@ void main() {
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
     });
-    await tester.pumpWidget(const App());
+    await tester.pumpWidget(App(nearbyMapDependencies: _nearbyDependencies()));
 
     await tester.tap(find.byKey(const Key('start-nearby')));
     await tester.pumpAndSettle();
@@ -68,14 +78,14 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('附近地图仅在主动操作后展示定位用途并模拟定位', (tester) async {
+  testWidgets('附近地图仅在主动操作后请求真实定位', (tester) async {
     tester.view.physicalSize = const Size(393, 852);
     tester.view.devicePixelRatio = 1;
     addTearDown(() {
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
     });
-    await tester.pumpWidget(const App());
+    await tester.pumpWidget(App(nearbyMapDependencies: _nearbyDependencies()));
     await tester.tap(find.byKey(const Key('start-nearby')));
     await tester.pumpAndSettle();
 
@@ -83,12 +93,12 @@ void main() {
     await tester.tap(find.byKey(const Key('nearby-locate')));
     await tester.pumpAndSettle();
     expect(find.text('用位置找附近机位'), findsOneWidget);
-    expect(find.textContaining('当前仅模拟定位'), findsOneWidget);
+    expect(find.textContaining('系统会询问前台定位权限'), findsOneWidget);
 
-    await tester.tap(find.byKey(const Key('continue-location-demo')));
+    await tester.tap(find.byKey(const Key('continue-location')));
     await tester.pump();
     expect(find.text('正在定位'), findsOneWidget);
-    await tester.pump(const Duration(milliseconds: 900));
+    await tester.pump(const Duration(milliseconds: 120));
     await tester.pumpAndSettle();
     expect(find.text('当前位置附近 · 已按光线排序'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -104,13 +114,70 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.light,
-        home: const CreateFlowScreen(mode: CreationMode.nearby),
+        home: CreateFlowScreen(
+          mode: CreationMode.nearby,
+          nearbyMapDependencies: _nearbyDependencies(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('nearby-continue')), findsOneWidget);
     expect(find.text('雷峰塔 · 夕照'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('地点搜索返回真实坐标并可作为创作场景', (tester) async {
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await tester.pumpWidget(App(nearbyMapDependencies: _nearbyDependencies()));
+    await tester.tap(find.byKey(const Key('start-nearby')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('place-search')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('place-search-input')), '灵隐寺');
+    await tester.tap(find.byKey(const Key('place-search-submit')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('place-search-result-0')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('place-search-result-0')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('已找到真实地点 · 1 个机位'), findsOneWidget);
+    expect(find.byKey(const Key('nearby-continue')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('手动选择的最近城市会跨创作流程保留', (tester) async {
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final store = _MemoryRecentCitiesStore();
+    final dependencies = _nearbyDependencies(store: store);
+    await tester.pumpWidget(App(nearbyMapDependencies: dependencies));
+    await tester.tap(find.byKey(const Key('start-nearby')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('city-selector')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('manual-city-input')), '苏州');
+    await tester.tap(find.byKey(const Key('manual-city-submit')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('返回上一页'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('start-nearby')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('city-selector')));
+    await tester.pumpAndSettle();
+    expect(find.text('最近与常用'), findsOneWidget);
+    expect(find.byKey(const Key('city-苏州')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -160,4 +227,46 @@ void main() {
     expect(find.text('演示生成 · 尚未连接 AI 服务'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+}
+
+class _FakeLocationService implements NearbyLocationService {
+  const _FakeLocationService();
+
+  @override
+  Future<LocatedCity> locateCurrentCity() async {
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    return const LocatedCity(city: '杭州', point: LatLng(30.2434, 120.1502));
+  }
+
+  @override
+  Future<bool> openSettings(LocationFailureReason reason) async => true;
+}
+
+class _FakePlaceSearchService implements PlaceSearchService {
+  const _FakePlaceSearchService();
+
+  @override
+  Future<List<PlaceSearchResult>> search({
+    required String query,
+    required String city,
+  }) async => [
+    const PlaceSearchResult(
+      name: '灵隐寺',
+      displayName: '浙江省杭州市西湖区灵隐寺',
+      point: LatLng(30.2409, 120.1016),
+    ),
+  ];
+}
+
+class _MemoryRecentCitiesStore implements RecentCitiesStore {
+  List<String> cities = [];
+
+  @override
+  Future<List<String>> load() async => List.unmodifiable(cities);
+
+  @override
+  Future<List<String>> remember(String city) async {
+    cities = [city, ...cities.where((item) => item != city)].take(6).toList();
+    return List.unmodifiable(cities);
+  }
 }
