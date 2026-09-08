@@ -1,6 +1,9 @@
 # 变更索引与交付约定
 
-当前仅有 [000-bootstrap 初始化意图](000-bootstrap/intent.md)、[规格](000-bootstrap/spec.md)、[计划](000-bootstrap/plan.md)。这不是产品需求已确认的证据。
+当前变更：
+
+- [000-bootstrap 初始化意图](000-bootstrap/intent.md)、[规格](000-bootstrap/spec.md)、[计划](000-bootstrap/plan.md)：技术初始化，不是产品需求已确认的证据。
+- [001-ai-travel-photo 产品意图](001-ai-travel-photo/intent.md)、[交互](001-ai-travel-photo/interaction.md)、[视觉设计](001-ai-travel-photo/design.md)、[实施计划](001-ai-travel-photo/plan.md)与[验证](../verification/001-ai-travel-photo/README.md)：首页、统一创作流程和附近地图已有本地 Flutter 演示实现；真实服务与完整 MVP 范围仍待确定。
 
 新增业务变更时创建稳定 ID 的子目录，按需要生成下列文件，不要求每轮复制全部模板：
 

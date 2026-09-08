@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Scenic Me · 附近打卡地图高保真稿</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Noto Sans SC", sans-serif;
+      --ocean-950:#102f38; --ocean-900:#17343d; --ocean-700:#286977; --ocean-500:#3b7b85;
+      --mist-50:#f6fbfa; --mist-100:#edf7f5; --mist-200:#dbece9; --mist-300:#c5dfdb;
+      --water-100:#d9eef1; --water-300:#acd9df; --leaf-100:#dfeedd; --leaf-300:#b9d7b2;
+      --coral-500:#ec6557; --coral-100:#ffded8; --white:#fff; --danger:#b94f4f; --control-border:#739b96;
+      --shadow-float:0 16px 44px rgba(16,47,56,.18); --shadow-soft:0 7px 22px rgba(16,47,56,.12);
+      --radius-xl:28px; --radius-lg:22px; --radius-md:16px;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;min-height:100%;background:var(--mist-100);color:var(--ocean-950)}
+    button,input{font:inherit} button{cursor:pointer;touch-action:manipulation} button:disabled{cursor:not-allowed}
+    .workspace{min-height:100vh;display:grid;grid-template-columns:minmax(270px,340px) auto;gap:52px;justify-content:center;align-items:center;padding:32px}
+    .review{align-self:center}.review h1{max-width:12ch;margin:0 0 12px;font-size:36px;line-height:1.08;letter-spacing:-.04em}.review>p{max-width:34ch;margin:0 0 28px;color:var(--ocean-700);font-size:15px;line-height:1.7}
+    .state-list{display:grid;gap:8px}.state-list button{min-height:44px;padding:0 14px;text-align:left;color:var(--ocean-900);background:rgba(255,255,255,.72);border:1px solid var(--mist-300);border-radius:14px;transition:background .16s,color .16s,border-color .16s}.state-list button[aria-pressed=true]{color:#fff;background:var(--ocean-900);border-color:var(--ocean-900)}
+    .review-note{margin-top:20px;padding-top:16px;border-top:1px solid var(--mist-300);color:var(--ocean-500);font-size:12px;line-height:1.65}
+    .phone{position:relative;width:393px;height:852px;overflow:hidden;background:var(--leaf-100);border:8px solid var(--ocean-950);border-radius:46px;box-shadow:0 30px 80px rgba(16,47,56,.26)}
+    .statusbar{position:absolute;z-index:21;top:0;left:0;right:0;height:42px;display:flex;align-items:center;justify-content:space-between;padding:4px 24px 0;color:var(--ocean-950);font-size:13px;font-weight:700}.status-icons{display:flex;align-items:center;gap:5px}.status-icons svg{width:15px;height:15px;stroke-width:2}.island{position:absolute;z-index:22;top:10px;left:50%;width:104px;height:29px;transform:translateX(-50%);background:var(--ocean-950);border-radius:18px}
+    .map{position:absolute;inset:0;background:var(--leaf-100)}.map>svg{width:100%;height:100%}.map text{font-family:inherit}.map-dim{opacity:.28}.map-credit{position:absolute;z-index:3;right:16px;bottom:231px;padding:5px 8px;color:var(--ocean-500);background:rgba(255,255,255,.82);border-radius:8px;font-size:10px}
+    .topbar{position:absolute;z-index:8;top:48px;left:16px;right:16px;display:grid;grid-template-columns:48px minmax(0,1fr) 48px;gap:8px}.icon-btn{width:48px;height:48px;display:grid;place-items:center;color:var(--ocean-950);background:rgba(255,255,255,.94);border:1px solid rgba(255,255,255,.82);border-radius:50%;box-shadow:var(--shadow-soft);transition:background .16s,transform .12s}.icon-btn:active{transform:scale(.96);background:var(--mist-100)}.icon-btn svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+    .searchbar{height:52px;display:flex;align-items:center;min-width:0;padding:5px 10px;background:rgba(255,255,255,.95);border:1px solid rgba(255,255,255,.84);border-radius:19px;box-shadow:var(--shadow-soft)}.city-trigger{height:40px;display:flex;align-items:center;gap:4px;padding:0 9px;color:var(--ocean-950);background:var(--mist-100);border:0;border-radius:12px;font-weight:700;white-space:nowrap}.city-trigger svg{width:13px;height:13px;fill:none;stroke:var(--ocean-700);stroke-width:2}.search-divider{width:1px;height:22px;margin:0 10px;background:var(--mist-300)}.search-hint{min-width:0;overflow:hidden;color:var(--ocean-500);font-size:12px;text-overflow:ellipsis;white-space:nowrap}
+    .filters{position:absolute;z-index:7;top:110px;left:16px;right:16px;display:flex;gap:8px;overflow:hidden}.filter{min-height:42px;padding:0 14px;color:var(--ocean-900);background:rgba(255,255,255,.92);border:1px solid rgba(197,223,219,.9);border-radius:15px;font-size:13px;font-weight:650;white-space:nowrap;transition:background .16s,color .16s}.filter[aria-pressed=true]{color:#fff;background:var(--ocean-900);border-color:var(--ocean-900)}
+    .mode-note{position:absolute;z-index:6;top:163px;left:16px;padding:7px 10px;color:var(--ocean-700);background:rgba(246,251,250,.92);border-radius:10px;font-size:11px;box-shadow:0 4px 14px rgba(16,47,56,.08)}
+    .locate{position:absolute;z-index:7;right:16px;top:168px}.locate::after{content:"";position:absolute;right:4px;top:4px;width:8px;height:8px;background:var(--coral-500);border:2px solid #fff;border-radius:50%}
+    .marker{position:absolute;z-index:5;display:flex;align-items:center;gap:8px;min-height:68px;padding:6px 10px 6px 6px;color:var(--ocean-950);background:rgba(255,255,255,.96);border:1px solid rgba(255,255,255,.86);border-radius:20px;box-shadow:0 10px 26px rgba(16,47,56,.17);transition:transform .16s,box-shadow .16s,border-color .16s}.marker:active{transform:scale(.97)}.marker img{width:50px;height:56px;object-fit:cover;border-radius:15px}.marker .copy{display:grid;gap:3px;text-align:left}.marker strong{font-size:12px}.marker small{color:var(--ocean-500);font-size:10px}.marker .pin{position:absolute;left:24px;bottom:-10px;width:14px;height:14px;background:var(--coral-500);border:3px solid #fff;border-radius:50%}.marker[aria-pressed=true]{border:2px solid var(--ocean-700);box-shadow:0 12px 30px rgba(16,47,56,.23)}.marker[aria-pressed=true]::after{content:"取景中";position:absolute;top:-12px;right:8px;padding:3px 7px;color:#fff;background:var(--ocean-900);border-radius:7px;font-size:9px;font-weight:700}.marker-a{left:76px;top:252px}.marker-b{right:16px;top:382px}.marker-c{left:18px;top:508px}
+    .scene-card{position:absolute;z-index:9;left:16px;right:16px;bottom:16px;min-width:0;padding:12px;background:rgba(255,255,255,.97);border:1px solid rgba(255,255,255,.9);border-radius:var(--radius-xl);box-shadow:var(--shadow-float);backdrop-filter:blur(16px)}.scene-content{display:grid;grid-template-columns:98px minmax(0,1fr);gap:14px}.scene-photo{position:relative;width:98px;height:118px;overflow:hidden;border-radius:20px}.scene-photo img{width:100%;height:100%;object-fit:cover}.focus-corner{position:absolute;width:15px;height:15px;border-color:#fff;border-style:solid}.fc1{top:9px;left:9px;border-width:2px 0 0 2px}.fc2{right:9px;bottom:9px;border-width:0 2px 2px 0}.scene-copy{min-width:0;padding-top:4px}.eyebrow{display:flex;align-items:flex-start;gap:5px;color:var(--ocean-700);font-size:11px;font-weight:650}.eyebrow span{min-width:0;overflow-wrap:anywhere}.eyebrow svg{flex:none;width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2}.scene-copy h2{margin:7px 0 5px;font-size:22px;line-height:1.2;letter-spacing:-.02em}.scene-copy p{margin:0;color:var(--ocean-500);font-size:12px;line-height:1.5}.use-scene{width:100%;min-height:50px;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;color:#fff;background:var(--ocean-900);border:0;border-radius:16px;font-weight:700;box-shadow:0 7px 18px rgba(23,63,73,.2);transition:background .16s,transform .12s}.use-scene:active{transform:scale(.985);background:var(--ocean-950)}.use-scene svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2}
+    .banner{position:absolute;z-index:12;top:164px;left:16px;right:76px;display:none;align-items:center;gap:8px;min-height:47px;padding:8px 11px;color:var(--ocean-900);background:#fff;border:1px solid var(--coral-100);border-radius:14px;box-shadow:var(--shadow-soft);font-size:11px}.banner.show{display:flex}.banner svg{flex:none;width:18px;height:18px;fill:none;stroke:var(--coral-500);stroke-width:2}.banner button{margin-left:auto;padding:7px;color:var(--ocean-900);background:transparent;border:0;font-weight:700}
+    .layer{position:absolute;z-index:30;inset:0;display:grid;align-items:end;min-width:0;padding:16px;background:rgba(16,47,56,.42);backdrop-filter:blur(5px)}.layer[hidden]{display:none}.sheet{min-width:0;max-width:100%;max-height:calc(100% - 20px);overflow:auto;padding:20px 20px 18px;background:var(--mist-50);border:1px solid rgba(255,255,255,.9);border-radius:30px;box-shadow:0 24px 70px rgba(16,47,56,.35)}.sheet-handle{width:36px;height:4px;margin:-6px auto 16px;background:var(--mist-300);border-radius:4px}.sheet-head{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}.sheet h2{min-width:0;margin:0;font-size:22px;letter-spacing:-.02em}.close{flex:none;width:44px;height:44px;display:grid;place-items:center;color:var(--ocean-900);background:var(--mist-200);border:0;border-radius:50%}.close svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2}
+    .location-choice{width:100%;min-height:68px;display:flex;align-items:center;gap:12px;margin-top:14px;padding:0 14px;text-align:left;color:#fff;background:var(--ocean-900);border:0;border-radius:18px}.choice-icon{width:42px;height:42px;display:grid;place-items:center;background:rgba(255,255,255,.13);border-radius:14px}.choice-icon svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:2}.location-choice strong,.location-choice span{display:block}.location-choice span{margin-top:3px;color:#cde1df;font-size:11px}.location-choice>.chevron{margin-left:auto;width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2}
+    .section-label{margin:18px 0 9px;color:var(--ocean-700);font-size:12px;font-weight:700}.city-form{display:grid;grid-template-columns:minmax(0,1fr) 56px;gap:8px;align-items:start}.field{position:relative;min-width:0}.field label{position:absolute;left:13px;top:6px;color:var(--ocean-500);font-size:9px}.field input{width:100%;min-width:0;height:52px;padding:19px 12px 4px;color:var(--ocean-950);background:#fff;border:1px solid var(--control-border);border-radius:14px;font-size:16px}.field input[aria-invalid=true]{border-color:var(--danger)}.field-error{display:block;margin:5px 3px 0;color:var(--danger);font-size:11px}.field-error[hidden]{display:none}.city-form>button{min-height:52px;color:var(--ocean-900);background:var(--mist-200);border:1px solid var(--control-border);border-radius:14px;font-weight:700}.city-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.city-option{min-width:0;min-height:44px;color:var(--ocean-900);background:#fff;border:1px solid var(--control-border);border-radius:13px}.privacy{display:flex;align-items:flex-start;gap:7px;margin:14px 0 0;color:var(--ocean-500);font-size:10px;line-height:1.5}.privacy svg{flex:none;width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8}
+    .permission-visual{height:104px;display:grid;place-items:center;margin:12px 0 16px;background:radial-gradient(circle at 50% 45%,#fff 0 18%,transparent 19%),radial-gradient(circle at 50% 50%,var(--water-300) 0 36%,transparent 37%),var(--water-100);border-radius:22px}.permission-visual svg{width:34px;height:34px;fill:none;stroke:var(--ocean-900);stroke-width:1.8}.permission-copy{margin:8px 0 16px;color:var(--ocean-500);font-size:13px;line-height:1.6}.secondary{width:100%;min-height:48px;margin-top:8px;color:var(--ocean-900);background:transparent;border:1px solid var(--control-border);border-radius:15px;font-weight:650}
+    .state-card{position:absolute;z-index:14;top:50%;left:50%;width:286px;display:none;transform:translate(-50%,-50%);padding:22px;text-align:center;background:rgba(255,255,255,.97);border:1px solid #fff;border-radius:24px;box-shadow:var(--shadow-float)}.state-card.show{display:block}.state-icon{width:52px;height:52px;display:grid;place-items:center;margin:0 auto 12px;color:var(--ocean-900);background:var(--mist-200);border-radius:18px}.state-icon svg{width:25px;height:25px;fill:none;stroke:currentColor;stroke-width:1.8}.state-card h2{margin:0 0 7px;font-size:18px}.state-card p{margin:0;color:var(--ocean-500);font-size:12px;line-height:1.55}.state-actions{display:flex;gap:8px;margin-top:16px}.state-actions button{flex:1;min-height:44px;color:var(--ocean-900);background:var(--mist-200);border:0;border-radius:13px;font-weight:700}.state-actions button:first-child{color:#fff;background:var(--ocean-900)}
+    .spinner{width:24px;height:24px;border:3px solid var(--mist-300);border-top-color:var(--ocean-700);border-radius:50%;animation:spin .8s linear infinite}.toast{position:absolute;z-index:40;left:50%;bottom:238px;max-width:310px;transform:translate(-50%,14px);padding:10px 14px;color:#fff;background:var(--ocean-950);border-radius:12px;box-shadow:var(--shadow-soft);font-size:12px;opacity:0;pointer-events:none;transition:opacity .18s,transform .18s}.toast.show{opacity:1;transform:translate(-50%,0)}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .frame-narrow .phone{width:375px;height:812px}
+    button:focus-visible,input:focus-visible{outline:3px solid var(--coral-500);outline-offset:2px}
+    @media(max-width:760px){.workspace{display:block;min-width:0;padding:0;overflow-x:hidden}.review{display:none}.phone{width:100%;max-width:100%;height:100dvh;min-width:0;border:0;border-radius:0;box-shadow:none}.island{display:none}.statusbar{padding-top:max(4px,env(safe-area-inset-top))}.topbar{top:max(48px,calc(env(safe-area-inset-top) + 36px))}.scene-card{bottom:max(16px,env(safe-area-inset-bottom))}}
+    @media(max-height:460px) and (orientation:landscape){.workspace{display:block;padding:0;overflow:hidden}.review{display:none}.phone{width:100%;height:100dvh;border:0;border-radius:0;box-shadow:none}.statusbar,.island{display:none}.topbar{top:12px;right:auto;width:355px}.filters{top:72px;right:auto;width:355px}.mode-note{top:124px}.locate{top:123px}.scene-card{left:auto;width:340px;bottom:12px}.marker-c{display:none}.marker-a{top:170px}.marker-b{top:215px}.map-credit{bottom:12px;right:372px}.layer{align-items:stretch;justify-items:end;padding:12px}.sheet{width:360px;overflow:auto}.permission-visual{height:72px}}
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+  </style>
+</head>
+<body>
+  <main class="workspace">
+    <aside class="review">
+      <h1>附近打卡地图</h1>
+      <p>方案 A 高保真设计。地图属于一次创作流程，不显示一级底部导航。选择状态仅用于设计走查。</p>
+      <div class="state-list" aria-label="设计状态切换">
+        <button data-review="default" aria-pressed="true">地图 · 定位成功</button>
+        <button data-review="city" aria-pressed="false">城市选择</button>
+        <button data-review="permission" aria-pressed="false">定位用途说明</button>
+        <button data-review="locating" aria-pressed="false">定位中</button>
+        <button data-review="denied" aria-pressed="false">定位拒绝后</button>
+        <button data-review="empty" aria-pressed="false">城市暂无场景</button>
+        <button data-review="error" aria-pressed="false">地图加载失败</button>
+      </div>
+      <div class="review-note">所有地图、距离、光线与机位为模拟数据。点击手机内的城市、取景标记和按钮可体验主要状态。</div>
+    </aside>
+
+    <section class="phone" aria-label="Scenic Me 附近打卡地图手机设计稿">
+      <div class="statusbar" aria-hidden="true"><span>9:41</span><div class="status-icons"><svg viewBox="0 0 24 24"><path d="M3 18h2M7 15h2v3M11 12h2v6M15 9h2v9"/></svg><svg viewBox="0 0 24 24"><path d="M5 10a10 10 0 0 1 14 0M8 13a6 6 0 0 1 8 0M11 16a2 2 0 0 1 2 0"/></svg><svg viewBox="0 0 24 24"><rect x="3" y="7" width="17" height="10" rx="2"/><path d="M22 10v4"/></svg></div></div>
+      <div class="island" aria-hidden="true"></div>
+
+      <div class="map" id="map" aria-label="杭州西湖附近可创作场景示意地图">
+        <svg viewBox="0 0 393 852" role="img" aria-label="杭州西湖示意地图，非真实地图数据">
+          <path fill="#e5f0df" d="M0 0h393v852H0z"/>
+          <path fill="#b8dcae" d="M0 98c67-35 130-22 166 26-53 69-69 144-40 224-54 35-91 95-126 156V98ZM305 533c32-24 62-30 88-20v339h-93c-18-110-21-232 5-319Z"/>
+          <path fill="#abdce2" d="M123 115c83 12 151 9 207 60 48 43 51 112 20 175-34 67-13 148-55 229-39 76-115 93-181 59-75-39-103-118-76-194 22-63 60-106 51-176-8-63-11-132 34-153Z"/>
+          <g fill="none" stroke="#fff" stroke-linecap="round"><path stroke-width="18" d="M-20 88C98 152 211 128 418 48M-28 741c134-92 265-73 450-17M335-15c-37 142-24 255 74 364"/><path stroke-width="7" d="M-18 548c123-31 203-10 279 65M36-20C22 135 45 218 97 298M-15 362c71 14 102 0 144-44"/></g>
+          <g fill="none" stroke="#2e7892" stroke-width="3" stroke-dasharray="7 9" opacity=".72"><path d="M53 366c93 43 207 16 297-64"/><path d="M69 652c72-31 151-30 232 2"/></g>
+          <g fill="#6a987d" font-size="12" font-weight="700"><text x="146" y="470">西湖</text><text x="143" y="487" font-size="9" font-weight="500">WEST LAKE</text><text x="18" y="218">西湖北山</text><text x="295" y="627">南山路</text></g>
+          <g fill="#f7fcfb" stroke="#78a895" stroke-width="2"><circle cx="235" cy="311" r="7"/><circle cx="235" cy="311" r="2" fill="#286977" stroke="none"/></g>
+        </svg>
+      </div>
+      <span class="map-credit">示意地图 · 非真实数据</span>
+
+      <header class="topbar">
+        <button class="icon-btn" aria-label="返回上一页"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></button>
+        <div class="searchbar">
+          <button class="city-trigger" id="cityTrigger" aria-haspopup="dialog" aria-expanded="false"><span id="cityName">杭州</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></button>
+          <span class="search-divider" aria-hidden="true"></span><span class="search-hint">搜索景点或区域</span>
+        </div>
+        <button class="icon-btn" aria-label="切换地图与列表"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="5" rx="2"/><rect x="4" y="14" width="16" height="5" rx="2"/></svg></button>
+      </header>
+
+      <div class="filters" aria-label="场景筛选">
+        <button class="filter" id="primaryFilter" aria-pressed="true">为你推荐 4</button><button class="filter" aria-pressed="false">自然风光</button><button class="filter" aria-pressed="false">城市地标</button>
+      </div>
+      <span class="mode-note" id="modeNote">当前位置附近 · 已按光线排序</span>
+      <button class="icon-btn locate" id="locateButton" aria-label="定位当前城市"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+
+      <div id="markers">
+        <button class="marker marker-a" data-scene="雷峰塔 · 夕照" data-meta="当前位置 · 约 1.2 km · 3 个机位" data-copy="现在适合侧逆光，人物轮廓会更自然。" aria-pressed="true"><img src="assets/west-lake-travel-portrait.png" alt="雷峰塔夕照示例"><span class="copy"><strong>雷峰塔</strong><small>夕照 · 3 机位</small></span><span class="pin" aria-hidden="true"></span></button>
+        <button class="marker marker-b" data-scene="西湖游船" data-meta="当前位置 · 约 800 m · 2 个机位" data-copy="水面反光柔和，适合自然抓拍感。" aria-pressed="false"><img src="assets/west-lake-travel-portrait.png" alt="西湖游船示例" style="object-position:65% center"><span class="copy"><strong>西湖游船</strong><small>自然 · 2 机位</small></span><span class="pin" aria-hidden="true"></span></button>
+        <button class="marker marker-c" data-scene="曲院风荷" data-meta="当前位置 · 约 2.4 km · 1 个机位" data-copy="绿意充足，适合清透的半身构图。" aria-pressed="false"><img src="assets/west-lake-travel-portrait.png" alt="曲院风荷示例" style="object-position:35% center"><span class="copy"><strong>曲院风荷</strong><small>自然 · 1 机位</small></span><span class="pin" aria-hidden="true"></span></button>
+      </div>
+
+      <div class="banner" id="deniedBanner" role="status"><svg viewBox="0 0 24 24"><path d="M12 22s7-5 7-12a7 7 0 1 0-14 0c0 7 7 12 7 12Z"/><path d="m9 9 6 6M15 9l-6 6"/></svg><span>未开启定位，当前按杭州浏览</span><button id="bannerCity">选城市</button></div>
+
+      <article class="scene-card" id="sceneCard">
+        <div class="scene-content"><div class="scene-photo"><img src="assets/west-lake-travel-portrait.png" alt="所选场景的旅行人像示例"><span class="focus-corner fc1" aria-hidden="true"></span><span class="focus-corner fc2" aria-hidden="true"></span></div><div class="scene-copy"><span class="eyebrow"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg><span id="sceneMeta">当前位置 · 约 1.2 km · 3 个机位</span></span><h2 id="sceneTitle">雷峰塔 · 夕照</h2><p id="sceneCopy">现在适合侧逆光，人物轮廓会更自然。</p></div></div>
+        <button class="use-scene" id="useScene">用这个场景继续<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+      </article>
+
+      <div class="layer" id="cityLayer" hidden>
+        <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="cityTitle"><div class="sheet-handle" aria-hidden="true"></div><div class="sheet-head"><h2 id="cityTitle">想去哪里找场景？</h2><button class="close" data-close aria-label="关闭城市选择"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
+          <button class="location-choice" id="locationChoice"><span class="choice-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></span><span><strong>定位当前城市</strong><span>查看附近距离与推荐机位</span></span><svg class="chevron" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button>
+          <div class="section-label">手动选择城市</div><form class="city-form" id="cityForm"><div class="field"><label for="cityInput">城市名称</label><input id="cityInput" autocomplete="address-level2" placeholder="例如：杭州" aria-describedby="cityError"><span class="field-error" id="cityError" role="alert" hidden>请输入城市名称</span></div><button type="submit">查找</button></form>
+          <div class="section-label">最近与常用</div><div class="city-grid"><button class="city-option" data-city="杭州">杭州</button><button class="city-option" data-city="上海">上海</button><button class="city-option" data-city="北京">北京</button><button class="city-option" data-city="成都">成都</button><button class="city-option" data-city="西安">西安</button><button class="city-option" data-city="厦门">厦门</button></div>
+          <p class="privacy"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg><span>手动选城无需定位权限。最近城市仅保存在这台设备。</span></p>
+        </section>
+      </div>
+
+      <div class="layer" id="permissionLayer" hidden>
+        <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="permissionTitle"><div class="sheet-handle" aria-hidden="true"></div><div class="sheet-head"><h2 id="permissionTitle">用位置找附近机位</h2><button class="close" data-close aria-label="关闭定位说明"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><div class="permission-visual"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></div><p class="permission-copy">只用于推荐你附近的景点、距离和拍摄机位。你也可以不开启定位，手动选择城市。</p><button class="use-scene" id="allowLocation">继续开启定位</button><button class="secondary" id="manualInstead">改为手动选城</button></section>
+      </div>
+
+      <section class="state-card" id="stateCard" role="status"><div class="state-icon" id="stateIcon"><svg viewBox="0 0 24 24"><path d="M4 19V5l5-2 6 2 5-2v14l-5 2-6-2-5 2Z"/><path d="M9 3v14M15 5v14"/></svg></div><h2 id="stateTitle">正在定位</h2><p id="stateCopy">正在获取当前位置，请稍候。</p><div class="state-actions" id="stateActions"><button id="statePrimary">重试</button><button id="stateSecondary">手动选城</button></div></section>
+      <div class="toast" id="toast" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <script>
+    const $=selector=>document.querySelector(selector), $$=selector=>document.querySelectorAll(selector);
+    const layers=[$('#cityLayer'),$('#permissionLayer')], stateCard=$('#stateCard'), markers=$('#markers'), sceneCard=$('#sceneCard'), deniedBanner=$('#deniedBanner'), map=$('#map');
+    let locationMode=true, toastTimer;
+    const iconMap='<svg viewBox="0 0 24 24"><path d="M4 19V5l5-2 6 2 5-2v14l-5 2-6-2-5 2Z"/><path d="M9 3v14M15 5v14"/></svg>';
+    const iconLocate='<div class="spinner" aria-hidden="true"></div>';
+    function hideLayers(){layers.forEach(layer=>layer.hidden=true);$('#cityTrigger').setAttribute('aria-expanded','false')}
+    function showLayer(layer){hideLayers();layer.hidden=false;if(layer===$('#cityLayer'))$('#cityTrigger').setAttribute('aria-expanded','true');layer.querySelector('button').focus()}
+    function toast(message){clearTimeout(toastTimer);$('#toast').textContent=message;$('#toast').classList.add('show');toastTimer=setTimeout(()=>$('#toast').classList.remove('show'),2600)}
+    function resetVisuals(){hideLayers();stateCard.classList.remove('show');deniedBanner.classList.remove('show');markers.hidden=false;sceneCard.hidden=false;map.classList.remove('map-dim')}
+    function setReviewState(state){
+      resetVisuals();
+      $$('[data-review]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.review===state)));
+      if(state==='city')showLayer($('#cityLayer'));
+      if(state==='permission')showLayer($('#permissionLayer'));
+      if(state==='locating')showState('正在定位','正在获取当前位置，请稍候。','locating');
+      if(state==='default'){locationMode=true;$('#primaryFilter').textContent='为你推荐 4';$('#modeNote').textContent='当前位置附近 · 已按光线排序';updateMetaForMode()}
+      if(state==='denied'){locationMode=false;$('#primaryFilter').textContent='精选场景 4';deniedBanner.classList.add('show');$('#modeNote').textContent='城市浏览 · 距离需开启定位';updateMetaForMode()}
+      if(state==='empty')showState('这里还没有可用场景','换个区域搜索，或上传你当时拍的风景照。','empty');
+      if(state==='error')showState('地图没有加载出来','检查网络后重试，或先用列表查看场景。','error');
+    }
+    function showState(title,copy,type){hideLayers();markers.hidden=true;sceneCard.hidden=true;map.classList.add('map-dim');$('#stateTitle').textContent=title;$('#stateCopy').textContent=copy;$('#stateIcon').innerHTML=type==='locating'?iconLocate:iconMap;$('#stateActions').style.display=type==='locating'?'none':'flex';$('#statePrimary').textContent=type==='empty'?'扩大范围':'重试';$('#stateSecondary').textContent=type==='empty'?'上传风景照':'列表查看';stateCard.classList.add('show')}
+    function chooseCity(city){locationMode=false;$('#cityName').textContent=city;$('#primaryFilter').textContent='精选场景 4';$('#modeNote').textContent='城市浏览 · 距离需开启定位';resetVisuals();updateMetaForMode();toast(`已切换到${city}，未使用定位`)}
+    function updateMetaForMode(){const selected=$('.marker[aria-pressed=true]');$('#sceneMeta').textContent=locationMode?selected.dataset.meta:'城市浏览 · 距离需开启定位'}
+    $('#cityTrigger').addEventListener('click',()=>showLayer($('#cityLayer')));$('#locateButton').addEventListener('click',()=>showLayer($('#permissionLayer')));$('#bannerCity').addEventListener('click',()=>showLayer($('#cityLayer')));
+    $$('[data-close]').forEach(button=>button.addEventListener('click',()=>{hideLayers();$('#cityTrigger').focus()}));layers.forEach(layer=>layer.addEventListener('click',event=>{if(event.target===layer)hideLayers()}));
+    $('#locationChoice').addEventListener('click',()=>showLayer($('#permissionLayer')));$('#manualInstead').addEventListener('click',()=>showLayer($('#cityLayer')));
+    $('#allowLocation').addEventListener('click',()=>{setReviewState('locating');setTimeout(()=>{locationMode=true;$('#cityName').textContent='杭州';$('#modeNote').textContent='当前位置附近 · 已按光线排序';setReviewState('default');updateMetaForMode();toast('已定位到杭州')},900)});
+    $$('[data-city]').forEach(button=>button.addEventListener('click',()=>chooseCity(button.dataset.city)));
+    $('#cityForm').addEventListener('submit',event=>{event.preventDefault();const input=$('#cityInput'),error=$('#cityError'),value=input.value.trim();if(value){input.removeAttribute('aria-invalid');error.hidden=true;chooseCity(value)}else{input.setAttribute('aria-invalid','true');error.hidden=false;input.focus()}});$('#cityInput').addEventListener('input',()=>{$('#cityInput').removeAttribute('aria-invalid');$('#cityError').hidden=true});
+    $$('.filter').forEach(button=>button.addEventListener('click',()=>{$$('.filter').forEach(item=>item.setAttribute('aria-pressed','false'));button.setAttribute('aria-pressed','true')}));
+    $$('.marker').forEach(marker=>marker.addEventListener('click',()=>{$$('.marker').forEach(item=>item.setAttribute('aria-pressed','false'));marker.setAttribute('aria-pressed','true');$('#sceneTitle').textContent=marker.dataset.scene;$('#sceneCopy').textContent=marker.dataset.copy;updateMetaForMode()}));
+    $('#useScene').addEventListener('click',()=>toast(`已选择${$('#sceneTitle').textContent}，下一步添加肖像`));
+    $$('[data-review]').forEach(button=>button.addEventListener('click',()=>setReviewState(button.dataset.review)));
+    $('#statePrimary').addEventListener('click',()=>setReviewState('default'));$('#stateSecondary').addEventListener('click',()=>showLayer($('#cityLayer')));
+    document.addEventListener('keydown',event=>{if(event.key==='Escape'&&layers.some(layer=>!layer.hidden)){hideLayers();$('#cityTrigger').focus()}});
+    const params=new URLSearchParams(location.search);if(params.get('frame')==='narrow')document.body.classList.add('frame-narrow');const initial=params.get('state')||'default';setReviewState(initial);
+  </script>
+</body>
+</html>

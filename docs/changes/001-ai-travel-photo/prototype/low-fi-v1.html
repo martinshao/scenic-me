@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scenic Me 核心流程低保真原型</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --page: light-dark(#efede7, #151614);
+      --surface: light-dark(#ffffff, #242622);
+      --soft: light-dark(#ebe8df, #32352f);
+      --text: light-dark(#232720, #f4f1e9);
+      --muted: light-dark(#696d63, #b6baaf);
+      --line: light-dark(#d2cec3, #484c43);
+      --primary: light-dark(#315c45, #9bc9ae);
+      --on-primary: light-dark(#ffffff, #142019);
+      --danger: light-dark(#a13b31, #ffaea5);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px 14px 48px; color: var(--text); background: var(--page); }
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, input:focus-visible { outline: 3px solid color-mix(in srgb, var(--primary) 55%, transparent); outline-offset: 2px; }
+    .prototype-tools { max-width: 620px; margin: 0 auto 18px; }
+    .prototype-tools h1 { margin: 0 0 6px; font-size: 20px; font-weight: 600; }
+    .prototype-tools p { margin: 0 0 12px; color: var(--muted); }
+    .case-list { display: flex; gap: 8px; flex-wrap: wrap; }
+    .case-button { min-height: 42px; padding: 8px 12px; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+    .case-button[aria-pressed="true"] { color: var(--on-primary); background: var(--primary); border-color: transparent; }
+    .phone { width: min(100%, 390px); min-height: 690px; margin: 0 auto; overflow: hidden; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 30px; box-shadow: 0 16px 50px color-mix(in srgb, var(--text) 12%, transparent); }
+    .screen { min-height: 688px; display: flex; flex-direction: column; padding: 18px; }
+    .topbar { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .brand { font-weight: 650; letter-spacing: .06em; }
+    .icon-button { min-width: 44px; min-height: 44px; color: var(--text); background: transparent; border: 0; border-radius: 12px; }
+    .progress { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin: 8px 0 22px; }
+    .progress span { height: 4px; background: var(--soft); border-radius: 999px; }
+    .progress span.done { background: var(--primary); }
+    h2 { margin: 10px 0 6px; font-size: 26px; line-height: 1.16; font-weight: 650; }
+    h3 { margin: 0 0 4px; font-size: 16px; font-weight: 600; }
+    p { line-height: 1.45; }
+    .intro { margin: 0 0 18px; color: var(--muted); }
+    .stack { display: grid; gap: 10px; }
+    .choice { width: 100%; min-height: 72px; display: flex; align-items: center; gap: 12px; padding: 14px; color: var(--text); text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
+    .choice.selected { border: 2px solid var(--primary); background: color-mix(in srgb, var(--primary) 10%, var(--surface)); }
+    .choice-icon { width: 42px; height: 42px; flex: 0 0 auto; display: grid; place-items: center; background: var(--soft); border-radius: 12px; font-size: 20px; }
+    .choice-copy { flex: 1; }
+    .choice-copy strong, .choice-copy small { display: block; }
+    .choice-copy small { margin-top: 3px; color: var(--muted); }
+    .primary { width: 100%; min-height: 50px; padding: 12px 16px; color: var(--on-primary); background: var(--primary); border: 0; border-radius: 14px; font-weight: 600; }
+    .secondary { min-height: 46px; padding: 10px 14px; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+    .ghost { min-height: 44px; padding: 8px 4px; color: var(--primary); background: transparent; border: 0; }
+    button:disabled { cursor: not-allowed; opacity: .42; }
+    .footer-action { margin-top: auto; padding-top: 18px; }
+    .notice { margin: 12px 0; padding: 12px; color: var(--text); background: var(--soft); border-radius: 12px; }
+    .notice.error { color: var(--danger); }
+    .search { width: 100%; min-height: 48px; margin-bottom: 12px; padding: 10px 12px; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+    .photo-placeholder { min-height: 170px; display: grid; place-items: center; margin: 8px 0 14px; padding: 20px; color: var(--muted); text-align: center; background: repeating-linear-gradient(45deg, var(--surface), var(--surface) 12px, var(--soft) 12px, var(--soft) 24px); border: 1px dashed var(--line); border-radius: 18px; }
+    .photo-placeholder.ready { color: var(--text); background: linear-gradient(145deg, var(--soft), color-mix(in srgb, var(--primary) 28%, var(--soft))); border-style: solid; }
+    .check { display: flex; align-items: flex-start; gap: 10px; margin-top: 14px; line-height: 1.4; }
+    .check input { width: 20px; height: 20px; flex: 0 0 auto; }
+    .summary { display: grid; gap: 1px; overflow: hidden; margin-top: 10px; background: var(--line); border: 1px solid var(--line); border-radius: 16px; }
+    .summary-row { display: flex; justify-content: space-between; gap: 16px; padding: 14px; background: var(--surface); }
+    .summary-row span:last-child { color: var(--muted); text-align: right; }
+    .loading-visual { width: 172px; height: 220px; display: grid; place-items: center; margin: 48px auto 18px; background: linear-gradient(145deg, var(--soft), color-mix(in srgb, var(--primary) 30%, var(--soft))); border-radius: 24px; }
+    .spinner { width: 38px; height: 38px; border: 4px solid color-mix(in srgb, var(--primary) 22%, transparent); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .spinner { animation: none; border-top-color: currentColor; } }
+    .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+    .result { aspect-ratio: 3/4; display: grid; place-items: end start; padding: 10px; color: var(--text); background: linear-gradient(150deg, var(--soft), color-mix(in srgb, var(--primary) 36%, var(--soft))); border: 1px solid transparent; border-radius: 15px; }
+    .result.selected { border: 3px solid var(--primary); }
+    .result:nth-child(2), .result:nth-child(3) { background: linear-gradient(215deg, var(--soft), color-mix(in srgb, var(--primary) 25%, var(--soft))); }
+    .action-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .status-line { min-height: 24px; margin-top: 10px; color: var(--primary); text-align: center; }
+    .ai-label { margin-top: 8px; color: var(--muted); font-size: 13px; text-align: center; }
+    @media (max-width: 420px) { body { padding: 8px 0 28px; } .prototype-tools { padding: 10px 14px 0; } .phone { border-right: 0; border-left: 0; border-radius: 0; } }
+  </style>
+</head>
+<body>
+  <section class="prototype-tools" aria-label="原型测试场景">
+    <h1>Scenic Me 核心流程</h1>
+    <p>选择一个测试场景，再从手机首页开始走查。</p>
+    <div class="case-list">
+      <button class="case-button" type="button" data-case="normal" aria-pressed="true">正常流程</button>
+      <button class="case-button" type="button" data-case="location-denied" aria-pressed="false">定位被拒绝</button>
+      <button class="case-button" type="button" data-case="generation-failed" aria-pressed="false">首次生成失败</button>
+    </div>
+  </section>
+  <main class="phone" id="phone" aria-live="polite"></main>
+
+  <script>
+    const phone = document.getElementById('phone');
+    const state = {
+      step: 'home', mode: '', scene: '', portrait: false, authorized: false,
+      style: '自然写真', testCase: 'normal', locationState: 'prompt', failedOnce: false,
+      selectedResult: 1, message: ''
+    };
+
+    const modeNames = {
+      memory: '修复旅行回忆', nearby: '发现附近打卡点', virtual: '虚拟去一个地方'
+    };
+
+    function resetFlow(testCase = state.testCase) {
+      Object.assign(state, {
+        step: 'home', mode: '', scene: '', portrait: false, authorized: false,
+        style: '自然写真', testCase, locationState: 'prompt', failedOnce: false,
+        selectedResult: 1, message: ''
+      });
+      render();
+    }
+
+    function renderTopbar(title, progressStep = 0) {
+      const back = state.step === 'home' ? '<span></span>' : '<button class="icon-button" type="button" data-action="back" aria-label="返回上一步">←</button>';
+      return `<div class="topbar">${back}<span class="brand">${title}</span><button class="icon-button" type="button" data-action="home" aria-label="返回首页">×</button></div>
+        ${progressStep ? `<div class="progress" aria-label="创作进度 ${progressStep}/4"><span class="${progressStep >= 1 ? 'done' : ''}"></span><span class="${progressStep >= 2 ? 'done' : ''}"></span><span class="${progressStep >= 3 ? 'done' : ''}"></span><span class="${progressStep >= 4 ? 'done' : ''}"></span></div>` : ''}`;
+    }
+
+    function home() {
+      return `<section class="screen">
+        <div class="topbar"><span class="brand">SCENIC ME</span><button class="icon-button" type="button" aria-label="作品与设置">◎</button></div>
+        <h2>这次想怎么拍？</h2><p class="intro">先选择旅行任务，后面都使用同一条创作流程。</p>
+        <div class="stack">
+          <button class="choice" type="button" data-mode="memory"><span class="choice-icon">▧</span><span class="choice-copy"><strong>修复我的旅行回忆</strong><small>使用当时拍摄的风景照</small></span><span>›</span></button>
+          <button class="choice" type="button" data-mode="nearby"><span class="choice-icon">⌖</span><span class="choice-copy"><strong>发现附近打卡点</strong><small>只在选择后申请定位</small></span><span>›</span></button>
+          <button class="choice" type="button" data-mode="virtual"><span class="choice-icon">✦</span><span class="choice-copy"><strong>虚拟去一个地方</strong><small>搜索景点并由 AI 重构场景</small></span><span>›</span></button>
+        </div>
+        <div class="notice"><strong>你的创作由你控制</strong><br>肖像与定位信息可以在“我的数据”中查看和删除。</div>
+        <div class="footer-action"><button class="ghost" type="button">查看未完成作品</button></div>
+      </section>`;
+    }
+
+    function scene() {
+      let body = '';
+      if (state.mode === 'memory') {
+        body = `<div class="photo-placeholder ${state.scene ? 'ready' : ''}">${state.scene ? '已选择：西湖暮色.jpg' : '上传你当时拍摄的风景照'}</div>
+          <button class="secondary" type="button" data-action="pick-memory">${state.scene ? '重新选择' : '选择照片'}</button>`;
+      } else if (state.mode === 'virtual') {
+        body = `<label for="destination">搜索目的地</label><input class="search" id="destination" placeholder="例如：富士山、巴黎铁塔">
+          <div class="stack"><button class="choice ${state.scene === '富士山·湖畔新视角' ? 'selected' : ''}" type="button" data-scene="富士山·湖畔新视角"><span class="choice-icon">△</span><span class="choice-copy"><strong>富士山 · 湖畔新视角</strong><small>AI 重构场景</small></span></button>
+          <button class="choice ${state.scene === '巴黎·雨夜电影感' ? 'selected' : ''}" type="button" data-scene="巴黎·雨夜电影感"><span class="choice-icon">◇</span><span class="choice-copy"><strong>巴黎 · 雨夜电影感</strong><small>AI 重构场景</small></span></button></div>`;
+      } else if (state.locationState === 'prompt') {
+        body = `<div class="notice"><strong>查找附近景点需要定位</strong><br>只用于本次推荐。你也可以跳过，直接搜索地点或上传风景照。</div>
+          <div class="stack"><button class="primary" type="button" data-action="allow-location">允许本次定位</button><button class="secondary" type="button" data-action="skip-location">跳过定位</button></div>`;
+      } else {
+        const denied = state.locationState === 'denied';
+        body = `${denied ? '<div class="notice error"><strong>没有获得定位权限</strong><br>仍然可以搜索地点或上传风景照。</div>' : '<p class="intro">已找到你附近的景点，也可以改用搜索或上传。</p>'}
+          <input class="search" aria-label="搜索景点" placeholder="搜索景点">
+          <div class="stack">
+            ${denied ? '' : `<button class="choice ${state.scene === '外滩·日落' ? 'selected' : ''}" type="button" data-scene="外滩·日落"><span class="choice-icon">⌖</span><span class="choice-copy"><strong>外滩 · 日落</strong><small>约 600 米 · AI 场景参考</small></span></button>`}
+            <button class="choice ${state.scene === '手动搜索的景点' ? 'selected' : ''}" type="button" data-scene="手动搜索的景点"><span class="choice-icon">⌕</span><span class="choice-copy"><strong>搜索一个地点</strong><small>不需要定位</small></span></button>
+            <button class="choice ${state.scene === '上传的风景照' ? 'selected' : ''}" type="button" data-scene="上传的风景照"><span class="choice-icon">▧</span><span class="choice-copy"><strong>上传风景照</strong><small>使用当前或以前拍摄的照片</small></span></button>
+          </div>`;
+      }
+      return `<section class="screen">${renderTopbar(modeNames[state.mode], 1)}<h2>选择场景</h2><p class="intro">场景决定人物所处的地点、构图和光线。</p>${body}
+        <div class="footer-action"><button class="primary" type="button" data-action="to-portrait" ${state.scene ? '' : 'disabled'}>下一步：添加肖像</button></div></section>`;
+    }
+
+    function portrait() {
+      return `<section class="screen">${renderTopbar('添加肖像', 2)}<h2>选择一张清晰正面照</h2><p class="intro">建议脸部无遮挡、光线均匀，并且只有一位人物。</p>
+        <div class="photo-placeholder ${state.portrait ? 'ready' : ''}">${state.portrait ? '肖像已通过基础检查' : '尚未选择肖像'}</div>
+        <button class="secondary" type="button" data-action="pick-portrait">${state.portrait ? '重新选择肖像' : '从相册选择'}</button>
+        <label class="check"><input type="checkbox" data-action="authorize" ${state.authorized ? 'checked' : ''}><span>我确认照片中的成年人是本人，或已同意用于本次 AI 创作。</span></label>
+        <div class="footer-action"><button class="primary" type="button" data-action="to-style" ${state.portrait && state.authorized ? '' : 'disabled'}>下一步：选择风格</button></div></section>`;
+    }
+
+    function style() {
+      const styles = [['自然写真','真实'],['电影胶片','氛围'],['动漫旅行','风格化'],['奇幻大片','风格化']];
+      return `<section class="screen">${renderTopbar('选择风格', 3)}<h2>想要什么感觉？</h2><p class="intro">默认自然写真；风格不会改变你选择的地点。</p>
+        <div class="stack">${styles.map(([name, note]) => `<button class="choice ${state.style === name ? 'selected' : ''}" type="button" data-style="${name}"><span class="choice-icon">${name === '自然写真' ? '◉' : '✦'}</span><span class="choice-copy"><strong>${name}</strong><small>${note}</small></span></button>`).join('')}</div>
+        <div class="footer-action"><button class="primary" type="button" data-action="to-review">下一步：确认生成</button></div></section>`;
+    }
+
+    function review() {
+      return `<section class="screen">${renderTopbar('确认生成', 4)}<h2>检查这次创作</h2><p class="intro">生成后仍可返回调整，不会修改你的原始照片。</p>
+        <div class="summary"><div class="summary-row"><span>任务</span><span>${modeNames[state.mode]}</span></div><div class="summary-row"><span>场景</span><span>${state.scene}</span></div><div class="summary-row"><span>肖像</span><span>已确认</span></div><div class="summary-row"><span>风格</span><span>${state.style}</span></div></div>
+        <div class="notice">将生成多张候选图供比较。候选数量和额度规则将在 MVP 阶段确认。</div>
+        <div class="footer-action"><button class="primary" type="button" data-action="generate">开始生成</button><button class="ghost" type="button" data-action="back">返回修改风格</button></div></section>`;
+    }
+
+    function loading() {
+      return `<section class="screen">${renderTopbar('正在生成')}<div class="loading-visual"><span class="spinner" aria-label="生成中"></span></div><h2 style="text-align:center">正在调整人物、光影和场景</h2><p class="intro" style="text-align:center">你可以先离开，完成后会在作品中显示。</p><div class="footer-action"><button class="secondary" type="button" data-action="home">返回首页，后台继续</button></div></section>`;
+    }
+
+    function failed() {
+      return `<section class="screen">${renderTopbar('生成未完成')}<div class="loading-visual"><span aria-hidden="true" style="font-size:42px">↻</span></div><h2>这次没有生成成功</h2><p class="intro">你的场景、肖像和风格都已保留。可以直接重试或返回调整。</p><div class="notice error">模拟原因：生成服务暂时不可用。</div><div class="footer-action stack"><button class="primary" type="button" data-action="generate">使用原设置重试</button><button class="secondary" type="button" data-action="to-style">调整风格</button></div></section>`;
+    }
+
+    function results() {
+      return `<section class="screen">${renderTopbar('生成结果')}<h2>选择你最喜欢的一张</h2><p class="intro">点击切换候选，也可以保留设置再次生成。</p>
+        <div class="result-grid">${[1,2,3,4].map(number => `<button class="result ${state.selectedResult === number ? 'selected' : ''}" type="button" data-result="${number}" aria-label="选择候选 ${number}"><span>候选 ${number}</span></button>`).join('')}</div>
+        <div class="ai-label">AI 创作 · 基于你选择的场景与肖像</div>
+        <div class="footer-action"><div class="action-row"><button class="secondary" type="button" data-action="regenerate">再次生成</button><button class="primary" type="button" data-action="save">保存 / 分享</button></div><div class="status-line">${state.message}</div></div></section>`;
+    }
+
+    function render() {
+      const pages = { home, scene, portrait, style, review, loading, failed, results };
+      phone.innerHTML = pages[state.step]();
+    }
+
+    function previousStep() {
+      const previous = { scene: 'home', portrait: 'scene', style: 'portrait', review: 'style', loading: 'review', failed: 'review', results: 'review' };
+      state.step = previous[state.step] || 'home';
+      render();
+    }
+
+    function startGeneration() {
+      state.step = 'loading';
+      state.message = '';
+      render();
+      window.setTimeout(() => {
+        if (state.testCase === 'generation-failed' && !state.failedOnce) {
+          state.failedOnce = true;
+          state.step = 'failed';
+        } else {
+          state.step = 'results';
+        }
+        render();
+      }, 900);
+    }
+
+    document.querySelector('.case-list').addEventListener('click', event => {
+      const button = event.target.closest('[data-case]');
+      if (!button) return;
+      document.querySelectorAll('[data-case]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+      resetFlow(button.dataset.case);
+    });
+
+    phone.addEventListener('change', event => {
+      if (event.target.matches('[data-action="authorize"]')) {
+        state.authorized = event.target.checked;
+        render();
+      }
+    });
+
+    phone.addEventListener('click', event => {
+      const mode = event.target.closest('[data-mode]');
+      const sceneChoice = event.target.closest('[data-scene]');
+      const styleChoice = event.target.closest('[data-style]');
+      const resultChoice = event.target.closest('[data-result]');
+      const action = event.target.closest('[data-action]')?.dataset.action;
+      if (mode) { state.mode = mode.dataset.mode; state.scene = ''; state.locationState = 'prompt'; state.step = 'scene'; render(); return; }
+      if (sceneChoice) { state.scene = sceneChoice.dataset.scene; render(); return; }
+      if (styleChoice) { state.style = styleChoice.dataset.style; render(); return; }
+      if (resultChoice) { state.selectedResult = Number(resultChoice.dataset.result); state.message = ''; render(); return; }
+      if (!action) return;
+      if (action === 'back') previousStep();
+      if (action === 'home') resetFlow();
+      if (action === 'pick-memory') { state.scene = '西湖暮色'; render(); }
+      if (action === 'allow-location') { state.locationState = state.testCase === 'location-denied' ? 'denied' : 'ready'; render(); }
+      if (action === 'skip-location') { state.locationState = 'denied'; render(); }
+      if (action === 'to-portrait' && state.scene) { state.step = 'portrait'; render(); }
+      if (action === 'pick-portrait') { state.portrait = true; render(); }
+      if (action === 'to-style' && state.portrait && state.authorized) { state.step = 'style'; render(); }
+      if (action === 'to-review') { state.step = 'review'; render(); }
+      if (action === 'generate') startGeneration();
+      if (action === 'regenerate') { state.step = 'review'; render(); }
+      if (action === 'save') { state.message = `候选 ${state.selectedResult} 已模拟保存；导出保留 AI 标识`; render(); }
+    });
+
+    render();
+  </script>
+</body>
+</html>

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../features/start/presentation/start_screen.dart';
+import '../features/home/presentation/home_shell.dart';
+import 'theme/app_theme.dart';
 
 class App extends StatelessWidget {
   const App({super.key});
@@ -8,9 +9,10 @@ class App extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'scenic_me',
-      theme: ThemeData(colorSchemeSeed: Colors.indigo, useMaterial3: true),
-      home: const StartScreen(),
+      title: 'Scenic Me',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.light,
+      home: const HomeShell(),
     );
   }
 }
