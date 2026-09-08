@@ -80,3 +80,13 @@
 ## 下一步
 
 由项目发起人走查真实地图与搜索流程；发布前确定正式地图／搜索供应商并补 Android 设备验收。随后选择真实相册与 AI 服务接口，并确定数据保存期限和素材来源规则。
+
+## 桌面图标接入（2026-09-08）
+
+- 输入：项目发起人确认采用 `assets/branding/scenic-me-app-icon-v2.png` 作为桌面图标。
+- 使用 `flutter_launcher_icons 0.14.4` 从无透明通道的 1024×1024 源文件生成 iOS AppIcon 资源与 Android 五档 mipmap 资源。
+- Android 桌面名称由工程名 `scenic_me` 调整为品牌名 `Scenic Me`。
+- `flutter analyze` 通过，`flutter build apk --debug` 成功生成 Android 调试包。
+- iPhone 17 / iOS 26.5 模拟器重新构建安装成功；返回系统桌面后确认图标蒙版、渐变底色、白色主符号和应用名称显示正常。
+- 桌面实测截图：[iOS 桌面图标](launcher-icon-ios.png)。
+- 未覆盖：Android 启动器实际截图、Android 13 主题图标、iOS 深色／着色图标变体；当前交付使用标准全彩图标。

@@ -101,8 +101,22 @@
 | 文件 | 来源 | 用途 | 状态 |
 | --- | --- | --- | --- |
 | `prototype/assets/west-lake-travel-portrait.png` | OpenAI 内置 ImageGen 生成 | 首页主视觉、灵感、作品与生成流程占位 | 仅用于产品视觉草稿 |
+| `../../../assets/branding/scenic-me-app-icon-v1.png` | OpenAI 内置 ImageGen 生成并导出为 1024×1024 | iOS／Android App 图标候选 | 品牌候选，尚未替换平台图标 |
+| `../../../assets/branding/scenic-me-app-icon-v2.png` | 参考用户提供的主流 App 图标风格，由 OpenAI 内置 ImageGen 生成并导出为 1024×1024 | iOS／Android App 图标源文件 | 已确认并接入平台图标 |
 
 生成提示词：`Create a premium photorealistic vertical travel editorial image for a mobile app prototype. An adult East Asian woman traveler seen in a natural three-quarter/full-body pose beside West Lake in Hangzhou at golden hour, with willow trees, calm water, distant traditional pagoda silhouette and subtle mountains. Authentic candid travel photography, realistic skin and fabric, understated cream linen outfit, gentle wind, cinematic but believable warm sunlight, deep forest-green and muted lake-blue palette, tasteful fine film grain, sophisticated Chinese travel magazine aesthetic. Leave calmer darker negative space in the lower-left for white UI text; keep the face and important landmarks away from the very bottom navigation area. No text, logos, watermark, frames, collage, illustration, fantasy effects, or extra people. Vertical 3:4 composition.`
+
+### App 图标候选 v1
+
+图标把四个品牌线索收敛成一个符号：深海蓝取景框代表照片补救与升级，山水地平线代表真实旅行，湖面倒影向下形成地点标记，珊瑚色四角星表示 AI 增强。背景延续 Morning Mist 浅色体系，不使用文字或人物；主要形状采用粗轮廓与大色块，保证在手机桌面的 48px 左右尺寸仍可辨认。
+
+交付文件为无透明通道、无预制圆角的 1024×1024 PNG，由 iOS／Android 在展示时应用平台蒙版。图形主体位于中心安全区，四角不会承载必要信息。当前只作为品牌候选保存，未替换 Flutter 平台启动图标，待项目发起人确认后再生成各平台尺寸并接入。
+
+### App 图标候选 v2
+
+根据项目发起人提供的图标合集参考，v2 转向更成熟的消费级 App 语言：高饱和薄荷青至晴空蓝渐变作为满版底色，以单一白色粗线符号承载相机、山景和地点尖角，珊瑚色四角星作为唯一 AI 提示。相比 v1，v2 删除了插画细节和多个分散轮廓，在桌面小尺寸下更直接、更有品牌块面感。
+
+参考图仅用于提取“强对比、单符号、粗线条和小尺寸识别”的视觉规律；图形没有复制或改造参考中的既有商标。交付为无透明通道、无预制圆角的 1024×1024 PNG，已经项目发起人确认作为桌面图标；平台尺寸与蒙版由 iOS／Android 图标资源生成流程处理。
 
 ## 当前验证证据与限制
 
